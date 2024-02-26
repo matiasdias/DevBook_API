@@ -1,0 +1,14 @@
+version: '3.9'
+
+services:     
+  database:
+    image: "postgres"
+    container_name: devbook
+    environment:
+      - "POSTGRES_USER=postgres"
+      - "POSTGRES_PASSWORD=123456"
+      - "POSTGRES_DB=devbook3"
+    ports:
+      - "5437:5432"
+    volumes:
+      - ./sql/sql.sql:/docker-entrypoint-initdb.d/sql.sql
