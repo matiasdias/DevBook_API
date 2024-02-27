@@ -5,11 +5,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 )
 
-// Representa um repositorio
 type Usuarios struct {
-	db *sql.DB // -> vai receber o banco
+	db *sql.DB
 }
 
 // NovoRepositorioDeUsuarios cria um repositorio de usuario
@@ -80,66 +80,57 @@ func (repositorio Usuarios) Buscar(nomeOuNick string) ([]modelos.Usuarios, error
 	return usuarios, nil
 }
 
-// BuscarPorId traz um usuario do banco de dados
-func (repositorio Usuarios) BuscarPorId(ID uint64) (modelos.Usuarios, error) {
-	linhas, erro := repositorio.db.Query(
-		"select id, nome, nick, email, criadoEm from usuarios where id = ?", ID,
-	)
-	if erro != nil {
-		return modelos.Usuarios{}, erro
-	}
-	defer linhas.Close()
+// BuscarPorId lista um usuário por id // OK
+func (repositorio Usuarios) BuscarPorId(ctx context.Context, ID uint64) (modelos.Usuarios, error) {
+	query := "SELECT id, nome, nick, email, criadoem FROM public.usuarios WHERE id = $1"
 
 	var usuario modelos.Usuarios
-
-	if linhas.Next() {
-		if erro = linhas.Scan(
-			&usuario.ID,
+	err := repositorio.db.QueryRowContext(ctx, query, ID).
+		Scan(&usuario.ID,
 			&usuario.Nome,
 			&usuario.Nick,
 			&usuario.Email,
-			&usuario.CriadoEm,
-		); erro != nil {
-			return modelos.Usuarios{}, erro
+			&usuario.CriadoEm)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Error list user with ID %d: %v", ID, err)
+			return modelos.Usuarios{}, nil
 		}
 	}
 
 	return usuario, nil
 }
 
-// Atualizar altera as informações de um usuairo no banco de dados
-func (repositorio Usuarios) Atualizar(ID uint64, usuario modelos.Usuarios) error {
-	statement, erro := repositorio.db.Prepare(
-		"update usuarios set nome = ?, nick = ?, email = ? where id = ?",
-	)
-	if erro != nil {
-		return erro
-	}
-	defer statement.Close()
+// Atualizar altera as informações de um usuairo no banco de dados //OK
+func (repositorio Usuarios) Atualizar(ctx context.Context, ID uint64, usuario modelos.Usuarios) error {
+	query := "UPDATE public.usuarios SET nome = $1, nick = $2, email = $3, updateem = current_timestamp WHERE id = $4"
 
-	if _, erro = statement.Exec(usuario.Nome, usuario.Nick, usuario.Email, ID); erro != nil {
-		return erro
+	_, err := repositorio.db.ExecContext(ctx, query,
+		usuario.Nome,
+		usuario.Nick,
+		usuario.Email, ID)
+	if err != nil {
+		log.Printf("Error updating user with ID %d: %v", ID, err)
+		return err
 	}
+
 	return nil
 }
 
-// Deletar exclui todas as informações de um usuario no banco de dados
-func (repositorio Usuarios) Deletar(ID uint64) error {
-	statement, erro := repositorio.db.Prepare(
-		"delete from usuarios where id = ?",
-	)
-	if erro != nil {
-		return erro
-	}
-	defer statement.Close()
+// Deletar exclui todas as informações de um usuario no banco de dados // OK
+func (repositorio Usuarios) Deletar(ctx context.Context, ID uint64) error {
+	query := "DELETE FROM public.usuarios WHERE id = $1"
 
-	if _, erro := statement.Exec(ID); erro != nil {
-		return erro
+	_, err := repositorio.db.ExecContext(ctx, query, ID)
+	if err != nil {
+		log.Printf("Error delete user with ID %d: %v", ID, err)
+		return err
 	}
+
 	return nil
 }
 
-// BuscarPorEmail busca um usuario por email e retorna o seu id e senha com hash
+// BuscarPorEmail busca um usuario por email e retorna o seu id e senha com hash //OK
 func (repositorio Usuarios) BuscarPorEmail(ctx context.Context, email string) (modelos.Usuarios, error) {
 	query := "SELECT id, email, senha FROM public.usuarios WHERE email = $1"
 
@@ -152,18 +143,19 @@ func (repositorio Usuarios) BuscarPorEmail(ctx context.Context, email string) (m
 	return user, nil
 }
 
-// Seguir permite que um usuario siga outro
-func (repositorio Usuarios) Seguir(usuarioID, seguidorID uint64) error {
-	statement, erro := repositorio.db.Prepare(
-		"insert ignore into seguidores (usuario_id, seguidor_id) values (?,?)",
-	)
-	if erro != nil {
-		return erro
+// Seguir permite que um usuario siga outro usuário
+func (repositorio Usuarios) Seguir(ctx context.Context, usuarioID, seguidorID uint64) error {
+	stmt, err := repositorio.db.
+		PrepareContext(ctx, `INSERT INTO seguidores (usuario_id, seguidor_id)VALUES ($1, $2)ON CONFLICT DO NOTHING
+`)
+	if err != nil {
+		return err
 	}
-	defer statement.Close()
+	defer stmt.Close()
 
-	if _, erro = statement.Exec(usuarioID, seguidorID); erro != nil {
-		return erro
+	_, err = stmt.ExecContext(ctx, usuarioID, seguidorID)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -268,4 +260,18 @@ func (repositorio Usuarios) AtualizarSenha(usuarioID uint64, senha string) error
 		return erro
 	}
 	return nil
+}
+
+// FindByEmailExists Verifica se o email que tá salvo no banco existe // ok
+func (repositorio Usuarios) FindByEmailExists(ctx context.Context, Email string) (bool, error) {
+	query := "SELECT EXISTS (SELECT 1 FROM public.usuarios WHERE email = $1)"
+
+	var exists bool
+	err := repositorio.db.QueryRowContext(ctx, query, Email).Scan(&exists)
+	if err != nil {
+		log.Printf("Error checking if email exists: %v", err)
+		return false, err
+	}
+
+	return exists, nil
 }

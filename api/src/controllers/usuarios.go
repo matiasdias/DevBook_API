@@ -9,7 +9,6 @@ import (
 	"api/src/seguranca"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -49,7 +48,7 @@ func CriarUsuarios(w http.ResponseWriter, r *http.Request) {
 	repositorio := repositorios.NovoRepositorioDeUsuarios(db)
 	NewUsuario, err := repositorio.Criar(ctx, usuario)
 	if err != nil {
-		http.Error(w, "Error creating employee", http.StatusInternalServerError)
+		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
 	responseJSON, err := json.Marshal(NewUsuario)
@@ -82,8 +81,9 @@ func BuscarUsusarios(w http.ResponseWriter, r *http.Request) {
 	respostas.JSON(w, http.StatusOK, usuarios)
 }
 
-// BuscarUsusario busca o usuario pelo id
+// BuscarUsusario busca o usuario pelo id  // OK
 func BuscarUsusario(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	parametros := mux.Vars(r)
 
 	usuarioID, erro := strconv.ParseUint(parametros["usuarioId"], 10, 64)
@@ -100,36 +100,52 @@ func BuscarUsusario(w http.ResponseWriter, r *http.Request) {
 	defer db.Close() // adia a execução dessa função
 
 	repositorio := repositorios.NovoRepositorioDeUsuarios(db)
-	usuarios, erro := repositorio.BuscarPorId(usuarioID)
+	usuarios, erro := repositorio.BuscarPorId(ctx, usuarioID)
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
-	respostas.JSON(w, http.StatusOK, usuarios)
+	if usuarios.ID == uint64(0) {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	responseJSON, err := json.Marshal(usuarios)
+	if err != nil {
+		http.Error(w, "Error formatting JSON response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseJSON)
 }
 
-// AtualizarUsuario
+// AtualizarUsuarios Atualiza os dados do usuario // OK
 func AtualizarUsuarios(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	parametros := mux.Vars(r)
 	usuarioID, erro := strconv.ParseUint(parametros["usuarioId"], 10, 64)
 	if erro != nil {
 		respostas.Erro(w, http.StatusBadRequest, erro)
 		return
 	}
-	usuarioIDNoToken, erro := autenticacao.ExtrairUsuarioID(r)
-	if erro != nil {
-		respostas.Erro(w, http.StatusUnauthorized, erro)
-		return
-	}
-	if usuarioID != usuarioIDNoToken {
-		respostas.Erro(w, http.StatusForbidden, errors.New(
-			"Não é possivel atualizar o usuario que não seja o seu ")) //proibido de fazer isso
-		return
-	}
 
-	fmt.Println(usuarioIDNoToken)
+	//usuarioIDNoToken, erro := autenticacao.ExtrairUsuarioID(r)
+	//if erro != nil {
+	//	respostas.Erro(w, http.StatusUnauthorized, erro)
+	//	return
+	//}
+	//if usuarioID != usuarioIDNoToken {
+	//	respostas.Erro(w, http.StatusForbidden, errors.New(
+	//		"Não é possivel atualizar o usuario que não seja o seu ")) //proibido de fazer isso
+	//	return
+	//}
 
-	corpoRequisicao, erro := ioutil.ReadAll(r.Body)
+	//fmt.Println(usuarioIDNoToken)
+
+	corpoRequisicao, erro := io.ReadAll(r.Body)
 	if erro != nil {
 		respostas.Erro(w, http.StatusUnprocessableEntity, erro)
 		return
@@ -155,16 +171,49 @@ func AtualizarUsuarios(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	repositorio := repositorios.NovoRepositorioDeUsuarios(db)
-	if erro = repositorio.Atualizar(usuarioID, usuario); erro != nil {
+	existingUser, err := repositorio.BuscarPorId(ctx, usuarioID)
+	if err != nil {
+		respostas.Erro(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Verifica se esse funcionario existe
+	if existingUser.ID == uint64(0) {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Verifica se o email existe ou não no banco de dados
+	if exists, err := repositorio.FindByEmailExists(ctx, usuario.Email); err != nil {
+		http.Error(w, "Error checking email existence", http.StatusInternalServerError)
+		return
+	} else if exists {
+		http.Error(w, "Email already exists", http.StatusConflict)
+		return
+	}
+
+	// Atualiza o usuário
+	if erro = repositorio.Atualizar(ctx, usuarioID, usuario); erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
 
-	respostas.JSON(w, http.StatusNoContent, nil)
+	message := "User updated successfully"
+	responseJSON, err := json.Marshal(map[string]string{"message": message})
+	if err != nil {
+		http.Error(w, "Error formatting JSON response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseJSON)
 }
 
-// DeletarUsuario
+// DeletarUsuarios Remove um usuario do banco de dados // OK
 func DeletarUsuarios(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	parametros := mux.Vars(r)
 	usuarioID, erro := strconv.ParseUint(parametros["usuarioId"], 10, 64)
 	if erro != nil {
@@ -172,16 +221,16 @@ func DeletarUsuarios(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usuarioIDNoToken, erro := autenticacao.ExtrairUsuarioID(r)
-	if erro != nil {
-		respostas.Erro(w, http.StatusUnauthorized, erro)
-		return
-	}
-	if usuarioID != usuarioIDNoToken {
-		respostas.Erro(w, http.StatusForbidden, errors.New(
-			"Não é possivel deletar o usuario que não seja o seu ")) //proibido de fazer isso
-		return
-	}
+	//usuarioIDNoToken, erro := autenticacao.ExtrairUsuarioID(r)
+	//if erro != nil {
+	//	respostas.Erro(w, http.StatusUnauthorized, erro)
+	//	return
+	//}
+	//if usuarioID != usuarioIDNoToken {
+	//	respostas.Erro(w, http.StatusForbidden, errors.New(
+	//		"Não é possivel deletar o usuario que não seja o seu ")) //proibido de fazer isso
+	//	return
+	//}
 
 	db, erro := banco.Connection()
 	if erro != nil {
@@ -189,32 +238,58 @@ func DeletarUsuarios(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
+
 	repositorios := repositorios.NovoRepositorioDeUsuarios(db)
 
-	if erro = repositorios.Deletar(usuarioID); erro != nil {
+	existingUser, err := repositorios.BuscarPorId(ctx, usuarioID)
+	if err != nil {
+		respostas.Erro(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Verifica se esse funcionario existe
+	if existingUser.ID == uint64(0) {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	if erro = repositorios.Deletar(ctx, usuarioID); erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
-	respostas.JSON(w, http.StatusNoContent, nil)
+
+	message := "Employee deleted successfully"
+	responseJSON, err := json.Marshal(map[string]string{"message": message})
+	if err != nil {
+		http.Error(w, "Error formatting JSON response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseJSON)
 }
 
-// SeguirUsuarios permite que um usuario siga outro
+// SeguirUsuario permite que um usuario siga outro
 func SeguirUsuario(w http.ResponseWriter, r *http.Request) {
-	seguidorID, erro := autenticacao.ExtrairUsuarioID(r)
-	if erro != nil {
-		respostas.Erro(w, http.StatusUnauthorized, erro)
-		return
-	}
+	ctx := r.Context()
+	//seguidorID, erro := autenticacao.ExtrairUsuarioID(r)
+	//if erro != nil {
+	//	respostas.Erro(w, http.StatusUnauthorized, erro)
+	//	return
+	//}
+
+	var usuario modelos.Usuarios
 	parametros := mux.Vars(r)
 	usuarioID, erro := strconv.ParseUint(parametros["usuarioId"], 10, 64)
 	if erro != nil {
 		respostas.Erro(w, http.StatusBadRequest, erro)
 		return
 	}
-	if seguidorID == usuarioID {
-		respostas.Erro(w, http.StatusForbidden, errors.New("não é possivel seguir voce mesmo"))
-		return
-	}
+	//if seguidorID == usuarioID {
+	//	respostas.Erro(w, http.StatusForbidden, errors.New("Não é possivel seguir voce mesmo"))
+	//	return
+	//}
 	db, erro := banco.Connection()
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
@@ -223,7 +298,17 @@ func SeguirUsuario(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	repositorios := repositorios.NovoRepositorioDeUsuarios(db)
-	if erro = repositorios.Seguir(usuarioID, seguidorID); erro != nil {
+
+	seguidorID, erro := repositorios.BuscarPorEmail(ctx, usuario.Email)
+	if erro != nil {
+		respostas.Erro(w, http.StatusInternalServerError, erro)
+		return
+	}
+	if seguidorID.ID == usuarioID {
+		respostas.Erro(w, http.StatusForbidden, errors.New("Não é possivel seguir voce mesmo"))
+		return
+	}
+	if erro = repositorios.Seguir(ctx, usuarioID, seguidorID.ID); erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}

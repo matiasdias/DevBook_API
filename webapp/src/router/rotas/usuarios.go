@@ -24,69 +24,69 @@ var rotasUsuarios = []Rota{
 		URI:                "/buscar-usuarios",
 		Metodo:             http.MethodGet,
 		Funcao:             controllers.CarregarPaginasDeCadastroDeUsuarios,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/usuarios/{usuarioId}",
 		Metodo:             http.MethodGet,
 		Funcao:             controllers.CarregarPerfilDoUsuario,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/usuarios/{usuarioId}/parar-de-seguir",
 		Metodo:             http.MethodPost,
 		Funcao:             controllers.PararDeSeguirUsuario,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/usuarios/{usuarioId}/seguir",
 		Metodo:             http.MethodPost,
 		Funcao:             controllers.SeguirUsuario,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/perfil",
 		Metodo:             http.MethodGet,
 		Funcao:             controllers.CarregarPerfilDeUsuarioLogado,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/editar-usuario",
 		Metodo:             http.MethodGet,
 		Funcao:             controllers.CarregarPaginaDeEdicaoDeUsuario,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/editar-usuario",
 		Metodo:             http.MethodPut,
 		Funcao:             controllers.EditarUsuario,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/atualizar-senha",
 		Metodo:             http.MethodGet,
 		Funcao:             controllers.CarregarPaginaDeAtualizacaoDeSenha,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/atualizar-senha",
 		Metodo:             http.MethodPost,
 		Funcao:             controllers.AtualizarSenha,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 
 	{
 		URI:                "/deletar-usuario",
 		Metodo:             http.MethodDelete,
 		Funcao:             controllers.DeletarUsuario,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 }

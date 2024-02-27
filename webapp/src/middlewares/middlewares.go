@@ -6,7 +6,7 @@ import (
 	"webapp/src/cookies"
 )
 
-//Logger escreve informações da requisicao no terminal
+// Logger escreve informações da requisicao no terminal
 func Logger(ProximaFuncao http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("\n %s %s %s", r.Method, r.RequestURI, r.Host)
@@ -14,11 +14,12 @@ func Logger(ProximaFuncao http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-//Autenticar verifica se o usuario fazendo a requisição está autenticado
+// Autenticar Verifica a existençai de cookies
 func Autenticar(ProximaFuncao http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, erro := cookies.Ler(r); erro != nil {
 			http.Redirect(w, r, "/login", 302)
+			return
 		}
 		ProximaFuncao(w, r)
 	}

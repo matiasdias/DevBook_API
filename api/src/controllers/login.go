@@ -10,22 +10,24 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 )
 
-// Login é responsalvel por autenticar um usuario na API
+// Login é responsalvel por autenticar um usuario na API //OK
 func Login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
 	corpoRequest, erro := ioutil.ReadAll(r.Body)
 	if erro != nil {
 		respostas.Erro(w, http.StatusUnprocessableEntity, erro)
 		return
 	}
-	var usuario modelos.Usuarios //vindo na requisição
+
+	var usuario modelos.Usuarios
 	if erro = json.Unmarshal(corpoRequest, &usuario); erro != nil {
 		respostas.Erro(w, http.StatusBadRequest, erro)
 		return
 	}
+
 	db, erro := banco.Connection()
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
@@ -34,12 +36,12 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	repositorio := repositorios.NovoRepositorioDeUsuarios(db)
-	usuarioSalvoNoBanco, erro := repositorio.BuscarPorEmail(ctx, usuario.Email) // usuario salvo no banco
+	usuarioSalvoNoBanco, erro := repositorio.BuscarPorEmail(ctx, usuario.Email)
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
-	//esta verificando com a senha que está no banco
+	// Verificação se a senhas são iguais
 	if erro = seguranca.VerificarSenha(usuarioSalvoNoBanco.Senha, usuario.Senha); erro != nil {
 		respostas.Erro(w, http.StatusUnauthorized, erro) // não está autorizado a fazer essa operação
 		return
@@ -50,7 +52,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
-	usuarioID := strconv.FormatUint(usuarioSalvoNoBanco.ID, 10)
+	//usuarioID := strconv.FormatUint(usuarioSalvoNoBanco.ID, 10)
 
-	respostas.JSON(w, http.StatusOK, modelos.DadosAutenticacao{ID: usuarioID, Token: token})
+	respostas.JSON(w, http.StatusOK, modelos.DadosAutenticacao{ID: usuarioSalvoNoBanco.ID, Token: token})
 }

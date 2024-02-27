@@ -11,6 +11,6 @@ var rotasLogout = []Rota{
 		URI:                "/logout",
 		Metodo:             http.MethodGet,
 		Funcao:             controllers.Logout,
-		RequerAutenticacao: true,
+		RequerAutenticacao: false,
 	},
 }

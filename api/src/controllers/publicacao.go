@@ -1,13 +1,11 @@
 package controllers
 
 import (
-	"api/src/autenticacao"
 	"api/src/banco"
 	"api/src/modelos"
 	"api/src/repositorios"
 	"api/src/respostas"
 	"encoding/json"
-	"errors"
 	"strconv"
 
 	//"errors"
@@ -19,13 +17,16 @@ import (
 	//"github.com/gorilla/mux"
 )
 
-// CriarPublicacao Cria uma nova publicacao
+// CriarPublicacao Cria uma nova publicacao // OK
 func CriarPublicacao(w http.ResponseWriter, r *http.Request) {
-	usuarioID, erro := autenticacao.ExtrairUsuarioID(r)
-	if erro != nil {
-		respostas.Erro(w, http.StatusUnauthorized, erro)
-		return
-	}
+	ctx := r.Context()
+
+	//usuarioID, erro := autenticacao.ExtrairUsuarioID(r)
+	//if erro != nil {
+	//	fmt.Println(usuarioID)
+	//	respostas.Erro(w, http.StatusUnauthorized, erro)
+	//	return
+	//}
 	corpoRequisicao, erro := ioutil.ReadAll(r.Body)
 	if erro != nil {
 		respostas.Erro(w, http.StatusUnprocessableEntity, erro)
@@ -37,7 +38,8 @@ func CriarPublicacao(w http.ResponseWriter, r *http.Request) {
 		respostas.Erro(w, http.StatusBadRequest, erro)
 		return
 	}
-	publicacao.AutorID = usuarioID
+
+	//publicacao.AutorID = usuarioID
 
 	if erro = publicacao.Preparar(); erro != nil {
 		respostas.Erro(w, http.StatusBadRequest, erro)
@@ -52,21 +54,24 @@ func CriarPublicacao(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	repositorio := repositorios.NovoRepositorioDePublicacoes(db)
-	publicacao.ID, erro = repositorio.Criar(publicacao)
+	publicacao.ID, erro = repositorio.Criar(ctx, publicacao)
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
-	respostas.JSON(w, http.StatusCreated, publicacao)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	//w.Write(publicacao.ID)
 }
 
-// BuscarPublicacoes busca todas as publicações no banco de dados
+// BuscarPublicacoes busca todas as publicações no banco de dados // OK
 func BuscarPublicacoes(w http.ResponseWriter, r *http.Request) {
-	usuarioID, erro := autenticacao.ExtrairUsuarioID(r)
-	if erro != nil {
-		respostas.Erro(w, http.StatusUnauthorized, erro)
-		return
-	}
+	//usuarioID, erro := autenticacao.ExtrairUsuarioID(r)
+	//if erro != nil {
+	//	respostas.Erro(w, http.StatusUnauthorized, erro)
+	//	return
+	//}
 	db, erro := banco.Connection()
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
@@ -75,7 +80,7 @@ func BuscarPublicacoes(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	repositorio := repositorios.NovoRepositorioDePublicacoes(db)
-	publicacoes, erro := repositorio.Buscar(usuarioID)
+	publicacoes, erro := repositorio.Buscar()
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
@@ -83,8 +88,9 @@ func BuscarPublicacoes(w http.ResponseWriter, r *http.Request) {
 	respostas.JSON(w, http.StatusOK, publicacoes)
 }
 
-// BuscarPublicacao bysca uma publicacao por id
+// BuscarPublicacao busca uma publicacao por id //OK
 func BuscarPublicacao(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	parametros := mux.Vars(r)
 	publicacaoID, erro := strconv.ParseUint(parametros["publicacaoId"], 10, 64)
 	if erro != nil {
@@ -99,7 +105,7 @@ func BuscarPublicacao(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	repositorio := repositorios.NovoRepositorioDePublicacoes(db)
-	publicacao, erro := repositorio.BuscarPorID(publicacaoID)
+	publicacao, erro := repositorio.BuscarPorID(ctx, publicacaoID)
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
@@ -107,20 +113,22 @@ func BuscarPublicacao(w http.ResponseWriter, r *http.Request) {
 	respostas.JSON(w, http.StatusOK, publicacao)
 }
 
-// AtualizarPublicacao atualiza todas as publicações
+// AtualizarPublicacao atualiza as publicacções de acordo com o id forncecido // OK
 func AtualizarPublicacao(w http.ResponseWriter, r *http.Request) {
-	usuarioID, erro := autenticacao.ExtrairUsuarioID(r)
-	if erro != nil {
-		respostas.Erro(w, http.StatusUnauthorized, erro)
-		return
-	}
+	ctx := r.Context()
+	//usuarioID, erro := autenticacao.ExtrairUsuarioID(r)
+	//if erro != nil {
+	//	respostas.Erro(w, http.StatusUnauthorized, erro)
+	//	return
+	//}
+
 	//usuario que está no corpo da requisição
 	parametros := mux.Vars(r)
 	publicacaoID, erro := strconv.ParseUint(parametros["publicacaoId"], 10, 64)
 	if erro != nil {
 		respostas.Erro(w, http.StatusBadRequest, erro)
 		return
-	} //corpo da requisição
+	}
 
 	db, erro := banco.Connection()
 	if erro != nil {
@@ -130,16 +138,16 @@ func AtualizarPublicacao(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	repositorio := repositorios.NovoRepositorioDePublicacoes(db)
-	publicacaoSalvaNoBanco, erro := repositorio.BuscarPorID(publicacaoID)
-	if erro != nil {
-		respostas.Erro(w, http.StatusInternalServerError, erro)
-		return
-	}
-
-	if publicacaoSalvaNoBanco.AutorID != usuarioID {
-		respostas.Erro(w, http.StatusForbidden, errors.New("Não é possivel atualziar uma publicacao que não seja a sua "))
-		return
-	}
+	//publicacaoSalvaNoBanco, erro := repositorio.BuscarPorID(ctx, publicacaoID)
+	//if erro != nil {
+	//	respostas.Erro(w, http.StatusInternalServerError, erro)
+	//	return
+	//}
+	//
+	//if publicacaoSalvaNoBanco.AutorID != usuarioID {
+	//	respostas.Erro(w, http.StatusForbidden, errors.New("Não é possivel atualizar uma publicacao que não seja a sua "))
+	//	return
+	//}
 
 	corpoRequisicao, erro := ioutil.ReadAll(r.Body)
 	if erro != nil {
@@ -158,52 +166,74 @@ func AtualizarPublicacao(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if erro = repositorio.Atualizar(publicacaoID, publicacao); erro != nil {
+	if erro = repositorio.Atualizar(ctx, publicacaoID, publicacao); erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
 
-	respostas.JSON(w, http.StatusNoContent, nil)
+	message := "publications updated successfully"
+	responseJSON, err := json.Marshal(map[string]string{"message": message})
+	if err != nil {
+		http.Error(w, "Error formatting JSON response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseJSON)
 }
 
-// DeletarPublicacao deleta uma publicação
+// DeletarPublicacao Remove uma publicação // OK
 func DeletarPublicacao(w http.ResponseWriter, r *http.Request) {
-	usuarioID, erro := autenticacao.ExtrairUsuarioID(r)
-	if erro != nil {
-		respostas.Erro(w, http.StatusUnauthorized, erro)
-		return
-	} //usuario que está no corpo da requisição
+	ctx := r.Context()
+	//usuarioID, erro := autenticacao.ExtrairUsuarioID(r)
+	//if erro != nil {
+	//	respostas.Erro(w, http.StatusUnauthorized, erro)
+	//	return
+	//} //usuario que está no corpo da requisição
 	parametros := mux.Vars(r)
 	publicacaoID, erro := strconv.ParseUint(parametros["publicacaoId"], 10, 64)
 	if erro != nil {
 		respostas.Erro(w, http.StatusBadRequest, erro)
 		return
-	} //corpo da requisição
+	}
 	db, erro := banco.Connection()
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
 	defer db.Close()
+
 	repositorio := repositorios.NovoRepositorioDePublicacoes(db)
-	publicacaoSalvaNoBanco, erro := repositorio.BuscarPorID(publicacaoID)
-	if erro != nil {
+	//publicacaoSalvaNoBanco, erro := repositorio.BuscarPorID(ctx, publicacaoID)
+	//if erro != nil {
+	//	respostas.Erro(w, http.StatusInternalServerError, erro)
+	//	return
+	//}
+	//if publicacaoSalvaNoBanco.AutorID != usuarioID {
+	//	respostas.Erro(w, http.StatusForbidden, errors.New("Não é possivel deletar uma publicacao que não seja a sua "))
+	//	return
+	//}
+	if erro = repositorio.Deletar(ctx, publicacaoID); erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
-	if publicacaoSalvaNoBanco.AutorID != usuarioID {
-		respostas.Erro(w, http.StatusForbidden, errors.New("Não é possivel deletar uma publicacao que não seja a sua "))
+
+	message := "publications deleted successfully"
+	responseJSON, err := json.Marshal(map[string]string{"message": message})
+	if err != nil {
+		http.Error(w, "Error formatting JSON response", http.StatusInternalServerError)
 		return
 	}
-	if erro = repositorio.Deletar(publicacaoID); erro != nil {
-		respostas.Erro(w, http.StatusInternalServerError, erro)
-		return
-	}
-	respostas.JSON(w, http.StatusNoContent, nil)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseJSON)
 }
 
-// BuscarPublicacoesPorUsuario traz todas as publicacoes de um usuario especifico
+// BuscarPublicacoesPorUsuario traz todas as publicacoes de um usuario especifico //OK
 func BuscarPublicacoesPorUsuario(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	parametros := mux.Vars(r)
 	usuarioID, erro := strconv.ParseUint(parametros["usuarioId"], 10, 64)
 	if erro != nil {
@@ -216,8 +246,9 @@ func BuscarPublicacoesPorUsuario(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
+
 	repositorio := repositorios.NovoRepositorioDePublicacoes(db)
-	publicacoes, erro := repositorio.BuscarPorUsuario(usuarioID)
+	publicacoes, erro := repositorio.BuscarPorUsuario(ctx, usuarioID)
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
@@ -225,8 +256,9 @@ func BuscarPublicacoesPorUsuario(w http.ResponseWriter, r *http.Request) {
 	respostas.JSON(w, http.StatusOK, publicacoes)
 }
 
-// CurtirPublicacao adiciona uma curtida na publicacao
+// CurtirPublicacao adiciona uma curtida na publicacao // OK
 func CurtirPublicacao(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	parametros := mux.Vars(r)
 	publicacaoID, erro := strconv.ParseUint(parametros["publicacaoId"], 10, 64)
 	if erro != nil {
@@ -240,31 +272,53 @@ func CurtirPublicacao(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 	repositorio := repositorios.NovoRepositorioDePublicacoes(db)
-	if erro = repositorio.Curtir(publicacaoID); erro != nil {
+	if erro = repositorio.Curtir(ctx, publicacaoID); erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
-	respostas.JSON(w, http.StatusNoContent, nil)
+	message := "post successfully liked"
+	responseJSON, err := json.Marshal(map[string]string{"message": message})
+	if err != nil {
+		http.Error(w, "Error formatting JSON response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseJSON)
 }
 
-// DescurtirPublicacao retira uma curtida na publicacao
+// DescurtirPublicacao retira uma curtida na publicacao // OK
 func DescurtirPublicacao(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	parametros := mux.Vars(r)
 	publicacaoID, erro := strconv.ParseUint(parametros["publicacaoId"], 10, 64)
 	if erro != nil {
 		respostas.Erro(w, http.StatusBadRequest, erro)
 		return
 	}
+
 	db, erro := banco.Connection()
 	if erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
 	defer db.Close()
+
 	repositorio := repositorios.NovoRepositorioDePublicacoes(db)
-	if erro = repositorio.Descurtir(publicacaoID); erro != nil {
+	if erro = repositorio.Descurtir(ctx, publicacaoID); erro != nil {
 		respostas.Erro(w, http.StatusInternalServerError, erro)
 		return
 	}
-	respostas.JSON(w, http.StatusNoContent, nil)
+
+	message := "post successfully disliked"
+	responseJSON, err := json.Marshal(map[string]string{"message": message})
+	if err != nil {
+		http.Error(w, "Error formatting JSON response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseJSON)
 }
